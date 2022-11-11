@@ -1,0 +1,17 @@
+tofix:
+- integer 243 error : https://github.com/fish-shell/fish-shell/issues/5689
+- glitched display : firefox kiosk related ?
+
+test:
+- molotov on flatpak
+- copy/paste spice
+- podman and docker zfs
+- qemu test
+- bridge pour qemu
+- systemd suspend then hibernate delay and test
+- zfs snapshot /var or /var/lib
+- backup /var ?
+- separate /var
+
+prod:
+- enable wifi
