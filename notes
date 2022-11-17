@@ -1,0 +1,387 @@
+services = {
+  xserver = {
+    enable = true;
+	displayManager = {
+	  lightdm.enable = true;
+	  defaultSession = "none+bspwm";
+	};
+	desktopManager.xfce.enable = true;
+	windowManager.bspwm.enable = true;
+  };
+};
+
+==========================================
+{ pkgs, ... }
+
+  {
+    sound = {
+	  enable = true;
+	  mediaKeys.enable = true;
+	};
+	hardware.bluetooth = {
+	  enable = true;
+	  hsphfpd.enable = true;
+	  settings = {
+	    General = {
+		  Enable = "Source,Sink,Media,Socket";
+		};
+      };
+    };
+  };
+}
+===================================================
+  users.users.${user} = {
+    isNormalUser = true;
+	extraGroups = [ "wheel" "video" "audio" "networkmanager" "lp" "scanner" ];
+	initialPassword = "passowrd";
+	shell = pkgs.zsh;
+  };
+
+=======================================================
+{ config, pkgs, ... };
+let
+  user="nali"; #set variable for username
+in
+{
+  imports =
+    [
+	  ./example.nix
+	];
+	
+==============================================================
+  let
+     rofi-theme = {
+	   "*" = {
+	   };
+	 };
+   in
+   {
+     programs.rofi = {
+       enable = true;
+       theme = rofi-theme;
+     };
+    };
+  }	
+==================================================
+overlay simply
+============
+
+  nixpkgs.overlay = {
+    (self: super: {
+	   discord = super.discord.overrideAttrs (
+	     _: { src = builtins.fetchTarball {
+		   url = "https://discord.com/api/download?platform=linux&format=tar.gz";
+		   #sha256 = "0000000000000000000000000000000000000000000000000000"; #52
+	     }; }
+	   );	   
+    })
+  ];
+}
+=================================================
+
+	nix-channel --update
+		and
+	sudo nixos-rebuild switch --upgrade
+	
+	#configuration
+	system.autoUpgrade = {
+	  enable = true;
+	  channel = "https://nixos.org/channels/nixos-unstable";
+	};
+	
+	#save space
+	nix-collect-garbage
+	nix-env --list-generations
+	nix-env --delete-generations 14d
+	nix-env --delete-generations 10 11
+	#optimize store
+	nix-store --gc
+	# all-in-one
+	sudo nix-collect-garbage -d
+	
+	nix = {
+	  settings.auto-optimize-store = true;
+	  gc = {
+	     automatic = true;
+		 dates = "weekly";
+		 options = "--delete-older-than 7d"
+	  };
+	};
+===================================================	
+home-manager
+===============
+#unstable
+nix-channel --add https://github.com/nix-community/home-manger/archive/master.tar.gz home-manager
+
+sudo nix-channel -- remove home-manger
+nixos module: is existing nixos+adding ( channel adding should mention with "sudo"
+=============================
+ add configuration.nix # if you using flake remove below
+	imports = [
+	  ./hardware-configuration.nix
+	  <home-manger/nixos>
+    ];
+	
+	#users adding
+	users.users.${user} = {
+	  isNormalUser = true;
+	};
+	
+	home-manager.users.<name> = { pkgs, ...}; {
+	  #declared packages.
+	  home.packages = [ 
+	    pkgs.atool 
+		pkgs.httpie
+		pkgs.htop
+	  ];
+	};
+	
+
+standalone : isolated #relogin if any issues
+===============================
+home-manager through installing nix-shell
+
+	$nix-shell '<home-manager>' -A install
+	
+its stored 
+	/home/<user>/.config/nixpkgs/home.nix
+	
+adding extra to home.nix
+
+   home.packages = with pkgs; [ htop ];
+   
+   $ home-manager switch
+
+if you have existing dotfile
+===============================
+  home.file = {
+    ".config/alacritty/alacritty.yml".text = ''
+      {"font":{"bold":{"style":"Bold"}}} #copy yaml contents, its was auto-generated
+    '';
+  };
+
+  
+stored files (also with no link to NixOS)
+==========================================
+  home.file.".doom.d" = {
+    source ./doom.d;
+	recursive = true;
+	onChange = builtins.readFile ./doom.sh;
+  };
+  
+  home.file.".config/polybar/script/mic.sh"={
+    source = ./mic.sh;
+	executable = true;
+  };
+  
+=============================================
+Flakes
+==========================
+intro
+	
+	- Flakes is an "upcoming features" of the Nix package manager
+	- Specify code dependencies declaratively (will be stored in flake.lock)
+		-For Example : home-manger
+	- Rebuilding and updating whole system made easy
+	- very useful tool to build your own config 
+		- Multiple configs in one
+		- People with github dotfiles feel right at home
+		
+	note
+		1. git add . # flake not build properly and every changes made shouuld add "git add ."
+	
+	
+  # add configuration.nix
+  nix = {
+    package = pkgs.nixFlakes;
+	extraOptions = "experimental-features = nix-command flakes";
+  };
+  
+  
+  sudo nixos-rebuild switch
+  
+  mkdir ~/flake
+  cd ~/flake 
+  nix flake init # this will generated flake file
+  
+  remove hello from flake.nix
+  
+  copy /etc/nixos/* ~/flake
+   after root dont have controll 
+   all system configs controlling <user>
+  
+  ===========================================
+  adding inputs are attribute sets
+  ========================================
+  
+  
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+	#nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+  };
+  outputs = { self, nixpkgs };
+    let
+	  system = "x86_64-linux";
+	  pkgs = import nixpkgs {
+	    inherit system;
+		config.allowUnfree = true;
+	  };
+	  
+	  lib = nixpkgs.lib;
+	in {
+	  nixosConfiguration = {
+	    <user> = lib.nixosSystem {
+		  inherit system;
+		  modules = [ ./configuration.nix ];
+		  
+		  home-manager.nixosModules.home-manager {
+		    home-manager.useGlobalPkgs = true;
+			home-manager.useUserPackages = true;
+			home-manager.users.<user>. = {
+			  imports = ./home.nix ];
+			};
+		  };
+	    };
+	    #<second user> = lib.nixosSystem {
+		  #inherit system;
+		  #modules = [ ./configuration.nix ];
+		#};
+      };
+    };
+  }
+
+
+
+build
+===============
+	sudo nixos-rebuild switch
+	     or
+    sudo nixos-rebuild switch --flake .#<user>
+    # check, if fails after .#<user> 
+    # remove overlays configs + sha256 issues
+    # update currect sha256 from flake error
+	
+	
+	
+home-manager flake + saperate
+==================================
+{  
+  inputs = {
+    ...
+    home-manager = {
+	  url = github:nix-community/home-manager
+	  inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+  outputs = { self, nixpkgs, home-manager, ... };
+    let
+	   ...
+	in {
+	   ...
+	   hmConfig = {
+	     <user> =
+		 home-manager.lib.homeManagerConfiguration {
+		   inherit system pkgs;
+		   username = "<user>";
+		   homeDirectory = "/home/<user>";
+		   #stateVersion = "22.05";
+		   configuration = {
+		     imports = [
+			   ./home.nix
+			 ];
+		   };
+         };
+       };
+    };
+
+build
+==========
+nix build .#hmConfig.<user>.activationPackage
+
+check results and activcate file
+
+./activcate
+
+
+Flakes fresh Install
+==========================
+
+	sudo su
+	nix-env -iA nixos.git
+	git clone <repo url> /mnt/<path>
+    nixos-install --flake .#<host>
+	reboot
+	
+	/* login */
+	sudo rm -r /etc/nixos/configuration.nix
+	/* move build to desired location */
+	
+	
+	
+	
+flake.nix
+|__./hosts
+	|__default.nix
+	|__configuration.nix
+	|__home.nix
+	|__./desktop OR ./Laptop
+		|__./default.nix
+		|__./home.nix
+		
+		
+
+augments
+==========
+{ lib, inputs, system, home-manager, user, ... };
+
+{
+  desktop = lib.nixosSystem { 				#Desktop Profile
+    inherit system;							#pass flake variable
+	specialArgs = { inherit user inputs; };
+	modules = [
+	  ./desktop
+	  ./configuration.nix
+	  
+	  home-manager.nixosModules.home-manager {
+	    home-manager.useGlobalPkgs = true;
+		home-manager.useUserPackages = true;
+		home-manager.users.${user} = {
+		  imports = [(import ./home.nix)] ++ [(import ./desktop/home.nix)];
+		};
+	  };
+	};
+  };
+
+  laptop = lib.nixosSystem {
+    inherit system; 
+    specialArgs = { inherit user inputs; };
+    modules = [
+      ./laptop
+	  ./configuration.nix
+      
+	  home-manager.nixosModules.home-manager {
+	    home-manager.useGlobalPkgs = true;
+		home-manager.useUserPackages = true;
+		home-manager.users.${user} = {
+		  imports = [(import ./home.nix)] ++ [(import ./laptop/home.nix)];
+		};
+	  };
+	};
+  };
+  
+  vm = lib.nixosSystem {
+    inherit system;
+	specialArgs = { inherit user inputs; };
+	modules = [
+	  ./vm
+      ./configuration.nix
+
+      home-manager.nixosModules.home-manager {
+	    home-manager.useGlobalPkgs = true;
+		home-manager.useUserPackages = true;
+		home-manager.users.${user} = {
+		  imports = [(import ./home.nix)] ++ [(import ./vm/home.nix)];
+		};
+	  };
+	};
+  };  
